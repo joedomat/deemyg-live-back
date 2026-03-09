@@ -74,6 +74,14 @@ io.on('connection', (socket) => {
 
             tiktokConnection.on('connected', (state) => {
                 console.log(`[TikTok] Connected to @${username}`);
+
+                // Extract the HLS stream URL if available
+                const hlsUrl = state.roomInfo?.stream_url?.hls_pull_url;
+                if (hlsUrl) {
+                    console.log(`[TikTok] Stream URL found: ${hlsUrl}`);
+                    socket.emit('tiktok_video_url', { url: hlsUrl });
+                }
+
                 socket.emit('tiktok_status', { status: 'connected', username, roomInfo: state });
             });
 
@@ -124,6 +132,18 @@ io.on('connection', (socket) => {
                     uniqueId: data.uniqueId,
                     nickname: data.nickname,
                     likeCount: data.likeCount
+                });
+            });
+
+            // 4. Chat
+            tiktokConnection.on('chat', (data) => {
+                console.log(`[TikTok] Chat from ${data.uniqueId}: ${data.comment}`);
+                socket.emit('tiktok_chat', {
+                    userId: data.userId,
+                    uniqueId: data.uniqueId,
+                    nickname: data.nickname,
+                    comment: data.comment,
+                    profilePictureUrl: data.profilePictureUrl
                 });
             });
 

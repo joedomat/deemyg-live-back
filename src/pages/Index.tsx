@@ -10,9 +10,13 @@ import FloatingFansView from "../components/FloatingFansView";
 import DashboardView from "../components/DashboardView";
 import EffectsOverlay from "../components/EffectsOverlay";
 import BackgroundSlideshow from "../components/BackgroundSlideshow";
+import ChatOverlay from "../components/ChatOverlay";
+import LiveMonitor from "../components/LiveMonitor";
+
+import CoinCounter from "../components/CoinCounter";
 
 const Index = () => {
-  const { viewMode, editingEntity, setEditingEntity } = useStore();
+  const { viewMode, editingEntity, setEditingEntity, tiktokVideoUrl } = useStore();
   const [actionOverlay, setActionOverlay] = useState<'donator' | 'fan' | 'challenge' | null>(null);
 
   useEffect(() => {
@@ -30,8 +34,13 @@ const Index = () => {
 
       {viewMode === 'main' && (
         <>
-          <BackgroundSlideshow />
-          <FloatingFansView />
+          {tiktokVideoUrl ? (
+            <LiveMonitor isBackground={true} />
+          ) : (
+            <BackgroundSlideshow />
+          )}
+          <ChatOverlay />
+          <CoinCounter />
           <PhysicsJar />
         </>
       )}

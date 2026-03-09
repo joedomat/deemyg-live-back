@@ -1,11 +1,11 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { io, Socket } from 'socket.io-client';
-import { ViewMode, Donator, Fan, DroppedGift, EditingEntity, TransientEffect } from './types';
+import { ViewMode, Donator, Fan, DroppedGift, EditingEntity, TransientEffect, ChatMessage } from './types';
 import { GIFTS } from './constants';
 
 interface StoreContextType {
     donators: Donator[];
-    addDonator: (name: string, gift: string) => void;
+    addDonator: (name: string, gift: string, price?: number) => void;
     updateDonator: (id: string, name: string, gift: string) => void;
     removeDonator: (id: string) => void;
     fans: Fan[];
@@ -35,7 +35,13 @@ interface StoreContextType {
     disconnectTiktok: () => void;
     // Transient Effects
     effects: TransientEffect[];
-    addEffect: (type: 'like' | 'follow', text: string) => void;
+    addEffect: (type: 'like' | 'follow' | 'gift', text: string) => void;
+    // Chat
+    chatMessages: ChatMessage[];
+    // Video
+    tiktokVideoUrl: string | null;
+    // Coins
+    totalCoins: number;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -106,8 +112,31 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         }
     });
     const [effects, setEffects] = useState<TransientEffect[]>([]);
+    const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+    const [tiktokVideoUrl, setTiktokVideoUrl] = useState<string | null>(null);
 
-    const addEffect = (type: 'like' | 'follow', text: string) => {
+    // Total coins logic: Load from storage or calculate from existing donators if missing
+    const [totalCoins, setTotalCoins] = useState<number>(() => {
+        try {
+            const saved = localStorage.getItem('totalCoins');
+            if (saved !== null) return parseInt(saved);
+
+            // Migration: calculate from existing donators if they exist but totalCoins doesn't
+            const savedDonators = localStorage.getItem('donators');
+            if (savedDonators) {
+                const donatorsArr: Donator[] = JSON.parse(savedDonators);
+                return donatorsArr.reduce((sum, d) => {
+                    const gift = GIFTS.find(g => g.name === d.gift);
+                    return sum + (gift?.price || 0);
+                }, 0);
+            }
+            return 0;
+        } catch (e) {
+            return 0;
+        }
+    });
+
+    const addEffect = (type: 'like' | 'follow' | 'gift', text: string) => {
         const padding = 100;
         const x = type === 'like'
             ? padding + Math.random() * (window.innerWidth - padding * 2)
@@ -130,7 +159,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         // Auto remove effect after animation finishes
         setTimeout(() => {
             setEffects(prev => prev.filter(e => e.id !== newEffect.id));
-        }, type === 'follow' ? 4000 : 2500);
+        }, type === 'follow' || type === 'gift' ? 4000 : 2500);
     };
 
     // Persist data locally
@@ -162,10 +191,25 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         localStorage.setItem('isAutoMode', JSON.stringify(isAutoMode));
     }, [isAutoMode]);
 
-    const addDonator = (name: string, giftName: string) => {
+    useEffect(() => {
+        localStorage.setItem('totalCoins', totalCoins.toString());
+    }, [totalCoins]);
+
+    const addDonator = (name: string, giftName: string, price?: number) => {
         const giftObj = GIFTS.find(g => g.name === giftName);
-        const newDonator = { id: crypto.randomUUID(), name, gift: giftName, timestamp: Date.now() };
+        const newDonator = {
+            id: crypto.randomUUID(),
+            name,
+            gift: giftName,
+            timestamp: Date.now(),
+            profilePictureUrl: undefined // Manual additions don't have this by default
+        };
+
         setDonators((prev) => [newDonator, ...prev]);
+
+        // Update total coins
+        const coinAmount = price !== undefined ? price : (giftObj?.price || 0);
+        setTotalCoins(prev => prev + coinAmount);
 
         if (giftObj) {
             setDroppedGifts(prev => [...prev, {
@@ -190,6 +234,11 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     };
 
     const removeDonator = (id: string) => {
+        const target = donators.find(d => d.id === id);
+        if (target) {
+            const gift = GIFTS.find(g => g.name === target.gift);
+            setTotalCoins(prev => Math.max(0, prev - (gift?.price || 0)));
+        }
         setDonators((prev) => prev.filter(d => d.id !== id));
         setDroppedGifts((prev) => prev.filter(d => d.id !== id));
     };
@@ -220,9 +269,8 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
     };
 
     useEffect(() => {
-        // By passing no arguments, socket.io automatically connects to the host that served the page.
-        // This makes it work flawlessly when accessing from another PC on the same network (e.g., 192.168.x.x)
-        const newSocket = io();
+        const socketUrl = import.meta.env.PROD ? undefined : 'http://localhost:3001';
+        const newSocket = io(socketUrl);
         setSocket(newSocket);
 
         newSocket.on('connect', () => {
@@ -249,29 +297,17 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         });
 
         newSocket.on('tiktok_gift', (data: { nickname: string, giftName: string, giftPictureUrl: string, profilePictureUrl: string, diamondCount: number }) => {
-            // Check auto mode inside the callback using functional state updates or a ref if needed. 
-            // In StoreContext, we rely on the state snapshot or functional updates. 
-            // We'll use the functional update to check a ref or just rely on the dependency array.
             setIsAutoMode(currentAutoMode => {
-                if (!currentAutoMode) return currentAutoMode; // Skip if manual mode
+                if (!currentAutoMode) return currentAutoMode;
 
-                // Find a matching gift in our physical constants by name or fallback to generic
+                // Find matching gift
                 const giftObj = GIFTS.find(g => g.name.toLowerCase() === data.giftName.toLowerCase()) || GIFTS[0];
-                const newDonator = {
-                    id: crypto.randomUUID(),
-                    name: data.nickname,
-                    gift: data.giftName,
-                    timestamp: Date.now(),
-                    profilePictureUrl: data.profilePictureUrl
-                };
 
-                setDonators(prev => [newDonator, ...prev]);
-                setDroppedGifts(prev => [...prev, {
-                    ...newDonator,
-                    x: window.innerWidth * 0.1 + (Math.random() * window.innerWidth * 0.8),
-                    y: -100 - (Math.random() * 200),
-                    giftFile: giftObj.file,
-                }]);
+                // Add to donators and drop physical item (addDonator now handles the price update)
+                addDonator(data.nickname, giftObj.name, data.diamondCount);
+
+                // Trigger announcement effect
+                addEffect('gift', `${data.nickname} te ha regalado ${data.giftName}!`);
 
                 return currentAutoMode;
             });
@@ -279,23 +315,8 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
 
         newSocket.on('tiktok_follow', (data: { nickname: string }) => {
             setIsAutoMode(currentAutoMode => {
-                if (!currentAutoMode) return currentAutoMode; // Skip if manual mode
-
+                if (!currentAutoMode) return currentAutoMode;
                 addEffect('follow', `${data.nickname} is now following!`);
-
-                // Added fan on follow
-                setFans(prev => {
-                    const colors = ['#fff', '#34d399', '#3b82f6', '#f59e0b', '#ec4899'];
-                    // Give followers level 1 by default
-                    const level = 1;
-                    return [{
-                        id: crypto.randomUUID(),
-                        name: data.nickname,
-                        level,
-                        color: colors[0],
-                        timestamp: Date.now()
-                    }, ...prev];
-                });
                 return currentAutoMode;
             });
         });
@@ -303,23 +324,44 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         newSocket.on('tiktok_like', (data: { nickname: string, likeCount: number }) => {
             setIsAutoMode(currentAutoMode => {
                 if (!currentAutoMode) return currentAutoMode;
-
-                // Show multiple small floating generic text like effects if it's a combo
-                const count = Math.min(data.likeCount, 5); // display up to 5 icons per batch
+                const count = Math.min(data.likeCount, 5);
                 for (let i = 0; i < count; i++) {
                     setTimeout(() => {
                         addEffect('like', data.nickname);
                     }, i * 150);
                 }
-
                 return currentAutoMode;
             });
+        });
+
+        newSocket.on('tiktok_chat', (data: { userId: string, uniqueId: string, nickname: string, comment: string, profilePictureUrl?: string }) => {
+            const newMessage: ChatMessage = {
+                id: crypto.randomUUID(),
+                ...data,
+                timestamp: Date.now(),
+                side: 'left'
+            };
+
+            setChatMessages(prev => {
+                const nextSide = prev.length > 0 && prev[0].side === 'left' ? 'right' : 'left';
+                newMessage.side = nextSide;
+                const updated = [newMessage, ...prev];
+                return updated.slice(0, 50);
+            });
+
+            setTimeout(() => {
+                setChatMessages(prev => prev.filter(m => m.id !== newMessage.id));
+            }, 30000);
+        });
+
+        newSocket.on('tiktok_video_url', (data: { url: string }) => {
+            setTiktokVideoUrl(data.url);
         });
 
         return () => {
             newSocket.disconnect();
         };
-    }, []);
+    }, [isAutoMode]);
 
     const connectTiktok = (username: string) => {
         if (socket && username.trim()) {
@@ -344,7 +386,10 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
             editingEntity, setEditingEntity, lastFanLevel, setLastFanLevel,
             tiktokStatus, tiktokUsername, tiktokError, connectTiktok, disconnectTiktok,
             isAutoMode, setIsAutoMode,
-            effects, addEffect
+            effects, addEffect,
+            chatMessages,
+            tiktokVideoUrl,
+            totalCoins
         }}>
             {children}
         </StoreContext.Provider>
@@ -353,8 +398,6 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
 
 export const useStore = () => {
     const context = useContext(StoreContext);
-    if (context === undefined) {
-        throw new Error('useStore must be used within a StoreProvider');
-    }
+    if (!context) throw new Error('useStore must be used within StoreProvider');
     return context;
 };

@@ -6,7 +6,7 @@ const EffectsOverlay = () => {
     const { effects } = useStore();
 
     return (
-        <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden">
+        <div className="fixed inset-0 pointer-events-none z-[999] overflow-hidden">
             <AnimatePresence>
                 {effects.map(effect => {
                     if (effect.type === 'follow') {
@@ -57,6 +57,49 @@ const EffectsOverlay = () => {
                                     <span className="text-xs font-bold text-white bg-black/50 px-2 py-0.5 rounded-full mt-1 whitespace-nowrap">
                                         {effect.text}
                                     </span>
+                                </div>
+                            </motion.div>
+                        );
+                    }
+
+                    if (effect.type === 'gift') {
+                        return (
+                            <motion.div
+                                key={effect.id}
+                                initial={{ opacity: 0, scale: 0.5, y: 100 }}
+                                animate={{ opacity: 1, scale: 1, y: 0 }}
+                                exit={{ opacity: 0, scale: 1.5, y: -100 }}
+                                transition={{ type: 'spring', damping: 12, stiffness: 100 }}
+                                className="absolute inset-x-0 top-1/3 -translate-y-1/2 flex flex-col items-center justify-center pointer-events-none"
+                            >
+                                <div className="bg-black/40 backdrop-blur-2xl border-y-2 border-primary/50 py-8 px-20 relative overflow-hidden flex flex-col items-center max-w-[90vw] shadow-[0_0_100px_rgba(0,0,0,0.8)]">
+                                    {/* Animated light sweep */}
+                                    <motion.div
+                                        animate={{ x: ['-200%', '200%'] }}
+                                        transition={{ duration: 2, repeat: Infinity, ease: 'linear' }}
+                                        className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12"
+                                    />
+
+                                    <span className="text-xl md:text-2xl font-black text-primary uppercase tracking-[0.3em] mb-4 drop-shadow-lg">
+                                        ¡NUEVO REGALO!
+                                    </span>
+
+                                    <h2 className="text-4xl md:text-7xl font-black text-white text-center leading-none drop-shadow-[0_10px_10px_rgba(0,0,0,0.5)]">
+                                        {effect.text}
+                                    </h2>
+
+                                    <div className="mt-6 flex gap-2">
+                                        {[...Array(5)].map((_, i) => (
+                                            <motion.span
+                                                key={i}
+                                                animate={{ scale: [1, 1.5, 1], rotate: [0, 15, -15, 0] }}
+                                                transition={{ delay: i * 0.1, duration: 2, repeat: Infinity }}
+                                                className="text-2xl"
+                                            >
+                                                🎁
+                                            </motion.span>
+                                        ))}
+                                    </div>
                                 </div>
                             </motion.div>
                         );

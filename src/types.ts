@@ -29,9 +29,20 @@ export interface EditingEntity {
 
 export interface TransientEffect {
     id: string;
-    type: 'like' | 'follow';
+    type: 'like' | 'follow' | 'gift';
     text: string;
     x: number;
     y: number;
     timestamp: number;
+}
+
+export interface ChatMessage {
+    id: string;
+    userId: string;
+    uniqueId: string;
+    nickname: string;
+    comment: string;
+    profilePictureUrl?: string;
+    timestamp: number;
+    side: 'left' | 'right';
 }
