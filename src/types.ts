@@ -29,7 +29,7 @@ export interface EditingEntity {
 
 export interface TransientEffect {
     id: string;
-    type: 'like' | 'follow' | 'gift';
+    type: 'like' | 'follow' | 'gift' | 'join';
     text: string;
     x: number;
     y: number;

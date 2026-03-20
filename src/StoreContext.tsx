@@ -35,7 +35,7 @@ interface StoreContextType {
     disconnectTiktok: () => void;
     // Transient Effects
     effects: TransientEffect[];
-    addEffect: (type: 'like' | 'follow' | 'gift', text: string) => void;
+    addEffect: (type: 'like' | 'follow' | 'gift' | 'join', text: string) => void;
     // Chat
     chatMessages: ChatMessage[];
     // Video
@@ -136,7 +136,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         }
     });
 
-    const addEffect = (type: 'like' | 'follow' | 'gift', text: string) => {
+    const addEffect = (type: 'like' | 'follow' | 'gift' | 'join', text: string) => {
         const padding = 100;
         const x = type === 'like'
             ? padding + Math.random() * (window.innerWidth - padding * 2)
@@ -159,7 +159,7 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
         // Auto remove effect after animation finishes
         setTimeout(() => {
             setEffects(prev => prev.filter(e => e.id !== newEffect.id));
-        }, type === 'follow' || type === 'gift' ? 4000 : 2500);
+        }, type === 'follow' || type === 'gift' || type === 'join' ? 4000 : 2500);
     };
 
     // Persist data locally
@@ -352,6 +352,14 @@ export const StoreProvider = ({ children }: { children: ReactNode }) => {
             setTimeout(() => {
                 setChatMessages(prev => prev.filter(m => m.id !== newMessage.id));
             }, 30000);
+        });
+
+        newSocket.on('tiktok_member', (data: { nickname: string }) => {
+            setIsAutoMode(currentAutoMode => {
+                if (!currentAutoMode) return currentAutoMode;
+                addEffect('join', `${data.nickname} se unió al LIVE!`);
+                return currentAutoMode;
+            });
         });
 
         newSocket.on('tiktok_video_url', (data: { url: string }) => {

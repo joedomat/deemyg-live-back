@@ -62,7 +62,7 @@ io.on('connection', (socket) => {
                 processInitialData: false,
                 enableExtendedGiftInfo: true,
                 enableWebsocketUpgrade: true,
-                requestPollingIntervalMs: 2000,
+                requestPollingIntervalMs: 1000,
                 clientParams: {
                     "app_language": "en-US",
                     "device_platform": "web"
@@ -96,6 +96,12 @@ io.on('connection', (socket) => {
             });
 
             // --- EVENTS TO RELAY TO FRONTEND ---
+
+            // 0. Member (Join)
+            tiktokConnection.on('member', (data) => {
+                console.log(`[TikTok] Member joined from ${data.uniqueId}: ${data.nickname}`);
+                socket.emit('tiktok_member', { nickname: data.nickname });
+            });
 
             // 1. Gifts
             tiktokConnection.on('gift', (data) => {

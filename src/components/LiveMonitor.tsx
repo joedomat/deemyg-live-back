@@ -17,12 +17,37 @@ const LiveMonitor = ({ isBackground = false }: { isBackground?: boolean }) => {
         const setupHls = (videoEl: HTMLVideoElement, ref: React.MutableRefObject<Hls | null>) => {
             if (Hls.isSupported()) {
                 if (ref.current) ref.current.destroy();
-                const hls = new Hls({ enableWorker: true, lowLatencyMode: true });
+                const hls = new Hls({
+                    enableWorker: true,
+                    lowLatencyMode: true,
+                    liveSyncDurationCount: 3,
+                    liveMaxLatencyDurationCount: 10,
+                    maxLiveSyncPlaybackRate: 1.5
+                });
                 hls.loadSource(tiktokVideoUrl);
                 hls.attachMedia(videoEl);
                 ref.current = hls;
+
                 hls.on(Hls.Events.MANIFEST_PARSED, () => {
                     videoEl.play().catch(e => console.error("Auto-play failed:", e));
+                });
+
+                hls.on(Hls.Events.ERROR, (event, data) => {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                console.warn("fatal network error encountered, try to recover");
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                console.warn("fatal media error encountered, try to recover");
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                hls.destroy();
+                                break;
+                        }
+                    }
                 });
             } else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
                 videoEl.src = tiktokVideoUrl;
